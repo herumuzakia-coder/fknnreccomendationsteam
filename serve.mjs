@@ -28,7 +28,7 @@ function parseCSVLine(line) {
 }
 
 console.log('Loading game data (this may take a moment)...');
-const csvPath = path.join(__dirname, 'brand_assets', 'steam_preprocessed.csv');
+const csvPath = path.join(__dirname, 'assets', 'steam_preprocessed.csv');
 const csvText = fs.readFileSync(csvPath, 'utf-8');
 const lines = csvText.split('\n');
 
@@ -275,7 +275,7 @@ const server = http.createServer((req, res) => {
 
   // Static files
   let filePath;
-  if (p.startsWith('/brand_assets/')) {
+  if (p.startsWith('/assets/')) {
     filePath = path.join(__dirname, p.slice(1));
   } else {
     filePath = path.join(__dirname, p === '/' ? 'index.html' : p.slice(1));
