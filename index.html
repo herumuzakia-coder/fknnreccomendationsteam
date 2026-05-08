@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#FF6B1A"/>
+<meta name="description" content="Find your next Steam game with AI-powered FKNN recommendations"/>
+<title>FKNN Game Recommender</title>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="icon" href="/brand_assets/logo.png" type="image/png"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        bg:      '#0D0D14',
+        surface: '#13131F',
+        card:    '#1A1A28',
+        border:  '#252535',
+        orange:  { DEFAULT:'#FF6B1A', light:'#FF8C42', dark:'#D4520F' },
+        muted:   '#6B6B85',
+      },
+    }
+  }
+}
+</script>
+<style>
+/* ── Theme variables ── */
+:root {
+  --bg:#0D0D14; --bg-rgb:13,13,20;
+  --surface:#13131F;
+  --card:#1A1A28;
+  --border:#252535;
+  --border2:#1E1E2E;
+  --text:#F5F5FA;
+  --text-dim:#9999B0;
+  --text-mute:#6B6B85;
+  --text-dark:#4A4A5A;
+  --text-xdark:#3A3A4A;
+  --text-bright:#C0C0D0;
+  --sh-a:#1A1A28; --sh-b:#222232;
+}
+:root[data-theme="light"] {
+  --bg:#F0F0F8; --bg-rgb:240,240,248;
+  --surface:#FFFFFF;
+  --card:#F8F8FF;
+  --border:#D8D8EE;
+  --border2:#E4E4F4;
+  --text:#1A1A2E;
+  --text-dim:#555570;
+  --text-mute:#7070A0;
+  --text-dark:#9090B0;
+  --text-xdark:#A0A0C0;
+  --text-bright:#2A2A45;
+  --sh-a:#EAEAF8; --sh-b:#DDDDF0;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;overflow-x:hidden;transition:background .25s,color .25s}
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#FF6B1A}
+
+/* ── Card hover ── */
+.card-hover{transition:transform .2s,box-shadow .2s,border-color .2s;cursor:pointer}
+.card-hover:hover{transform:translateY(-5px);box-shadow:0 16px 48px rgba(255,107,26,.2),0 4px 16px rgba(0,0,0,.3);border-color:rgba(255,107,26,.5)!important}
+.card-hover:active{transform:translateY(-2px)}
+
+/* ── Hover description overlay ── */
+.card-desc-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(10,10,18,.97) 60%,rgba(10,10,18,.6));
+  padding:12px;display:flex;flex-direction:column;justify-content:flex-end;
+  opacity:0;transition:opacity .25s;pointer-events:none;
+}
+.card-hover:hover .card-desc-overlay{opacity:1}
+
+/* ── Skeleton loader ── */
+.skeleton{background:var(--card);border:1px solid var(--border2);border-radius:12px;overflow:hidden}
+.shimmer{
+  background:linear-gradient(90deg,var(--sh-a) 25%,var(--sh-b) 50%,var(--sh-a) 75%);
+  background-size:400% 100%;animation:shimmer 1.6s infinite;
+}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+/* ── Animations ── */
+.slide-up{animation:slideUp .35s cubic-bezier(.4,0,.2,1) both}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .3s ease both}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.rec-overlay{animation:overlayIn .38s cubic-bezier(.4,0,.2,1) both}
+@keyframes overlayIn{from{opacity:0;transform:translateX(100%)}to{opacity:1;transform:translateX(0)}}
+.rec-overlay.closing{animation:overlayOut .28s cubic-bezier(.4,0,.2,1) both}
+@keyframes overlayOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(100%)}}
+
+/* ── Filter panel chips ── */
+.fp-chip{transition:all .12s;cursor:pointer;padding:4px 10px;border-radius:99px;font-size:11px;white-space:nowrap;border:1px solid var(--border);background:rgba(128,128,128,.06);color:var(--text-dim);}
+.fp-chip:hover{opacity:.85;transform:translateY(-1px)}
+.fp-chip.fp-active-genre,.fp-chip.fp-active-tag{font-weight:700}
+
+/* ── Score bar ── */
+.score-bar-fill{transition:width .9s cubic-bezier(.4,0,.2,1)}
+
+/* ── Tag chip ── */
+.tag-chip{background:rgba(255,107,26,.1);border:1px solid rgba(255,107,26,.25);color:#FF8C42;padding:2px 7px;border-radius:99px;font-size:10px;white-space:nowrap}
+
+/* ── Spinner ── */
+.spinner{border:3px solid var(--border);border-top-color:#FF6B1A;border-radius:50%;width:32px;height:32px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Img placeholder ── */
+.img-placeholder{background:linear-gradient(135deg,var(--card),var(--surface));display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-mute);text-align:center;padding:8px}
+
+/* ── K Slider ── */
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;width:80px}
+input[type=range]::-webkit-slider-runnable-track{background:var(--border);height:4px;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#FF6B1A;border-radius:50%;margin-top:-5px}
+input[type=range]::-moz-range-track{background:var(--border);height:4px;border-radius:2px}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;background:#FF6B1A;border-radius:50%;border:none}
+
+/* ── Recently viewed strip ── */
+.rv-card{transition:transform .2s,border-color .2s}
+.rv-card:hover{transform:scale(1.06);border-color:rgba(255,107,26,.5)!important}
+
+/* ── Filter active count badge ── */
+.fav-count{background:#FF6B1A;color:#fff;font-size:9px;font-weight:800;border-radius:99px;padding:1px 5px;min-width:16px;text-align:center}
+
+/* ── Theme toggle ── */
+#theme-btn{transition:border-color .15s,color .15s,background .15s}
+#theme-btn:hover{border-color:#FF6B1A!important;color:#FF8C42!important}
+
+/* ── Light mode UI overrides ── */
+[data-theme="light"] header{background:rgba(var(--bg-rgb),.95)!important;border-color:var(--border2)!important}
+[data-theme="light"] #search-input{background:var(--surface)!important;border-color:var(--border)!important;color:var(--text)!important}
+[data-theme="light"] #search-clear{background:var(--border)!important;color:var(--text-dim)!important}
+[data-theme="light"] #filter-bar-wrap > div > div:first-child{background:rgba(var(--bg-rgb),.95)!important;border-color:var(--border)!important}
+[data-theme="light"] #filter-btn{background:var(--card)!important;border-color:var(--border)!important;color:var(--text-dim)!important}
+[data-theme="light"] #filter-panel{background:var(--surface)!important;border-color:var(--border)!important}
+[data-theme="light"] #filter-search{background:var(--card)!important;border-color:var(--border)!important;color:var(--text)!important}
+[data-theme="light"] .card-hover{background:var(--card)!important;border-color:var(--border)!important}
+[data-theme="light"] .card-hover .font-semibold,[data-theme="light"] .card-hover .font-bold{color:var(--text)!important}
+[data-theme="light"] .rv-card{background:var(--card)!important;border-color:var(--border)!important}
+[data-theme="light"] .rv-card div:last-child div{color:var(--text-bright)!important}
+[data-theme="light"] #rec-overlay{background:var(--bg)!important}
+[data-theme="light"] #rec-overlay > div:first-child{background:rgba(var(--bg-rgb),.96)!important;border-color:var(--border2)!important}
+[data-theme="light"] #rec-title,[data-theme="light"] #rec-hero-name{color:var(--text)!important}
+[data-theme="light"] #rec-hero-desc{color:var(--text-dim)!important}
+[data-theme="light"] #rec-hero{background:var(--card)!important;border-color:var(--border)!important}
+[data-theme="light"] #rec-hero img+div+div{background:var(--surface)!important}
+[data-theme="light"] #rec-hero > div:first-child{background:var(--surface)!important}
+[data-theme="light"] #rec-grid .card-hover,[data-theme="light"] #rec-loading+div .card-hover{background:var(--card)!important;border-color:var(--border)!important}
+[data-theme="light"] #toast-msg{background:var(--card)!important;border-color:var(--border)!important;color:var(--text)!important}
+[data-theme="light"] #scroll-top{background:var(--card)!important;border-color:var(--border)!important;color:var(--text-dim)!important}
+
+/* misc */
+.line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<header style="background:rgba(var(--bg-rgb),.94);backdrop-filter:blur(16px);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:50;transition:background .25s,border-color .25s;">
+  <div class="max-w-screen-2xl mx-auto px-4 py-3 flex items-center gap-3">
+
+    <!-- Logo -->
+    <div class="flex items-center gap-2.5 shrink-0 cursor-pointer" onclick="closeRec()">
+      <img src="/brand_assets/logo.png" alt="Logo" class="w-9 h-9 object-contain"/>
+      <div class="hidden sm:block leading-none">
+        <div class="text-xs font-black tracking-widest uppercase" style="color:#FF6B1A;letter-spacing:.18em;">Recommendation</div>
+        <div class="text-xs tracking-widest uppercase" style="color:#6B6B85;letter-spacing:.2em;font-size:9px;">System · FKNN</div>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="flex-1 relative max-w-lg mx-auto">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style="color:#6B6B85" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+      <input id="search-input" type="search" placeholder="Search games…"
+        class="w-full pl-9 pr-8 py-2 rounded-lg text-sm focus:outline-none"
+        style="background:var(--surface);border:1px solid var(--border);color:var(--text);transition:border-color .2s,background .25s"
+        onfocus="this.style.borderColor='rgba(255,107,26,.5)'" onblur="this.style.borderColor='var(--border)'"
+        autocomplete="off" spellcheck="false" aria-label="Search games"/>
+      <button id="search-clear" aria-label="Clear search"
+        class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold hover:opacity-70"
+        style="background:var(--border);color:var(--text-dim);">✕</button>
+    </div>
+
+    <!-- Theme toggle -->
+    <button id="theme-btn" aria-label="Toggle light/dark mode"
+      class="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg"
+      style="background:var(--card);border:1px solid var(--border);color:var(--text-dim);">
+      <svg id="theme-icon-moon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <svg id="theme-icon-sun" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════════════════ FILTER BAR ═══════════════════════ -->
+<div id="filter-bar-wrap" class="sticky z-40" style="top:57px;">
+  <div style="position:relative;">
+    <!-- Bar row -->
+    <div style="background:rgba(var(--bg-rgb),.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:7px 14px;display:flex;align-items:center;gap:8px;transition:background .25s,border-color .25s;">
+      <button id="filter-btn" class="shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+        style="background:var(--card);border:1px solid var(--border);color:var(--text-dim);transition:border-color .15s,color .15s,background .25s;">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M22 3H2l8 9.46V19l4 2V12.46z"/>
+        </svg>
+        Filters
+        <span id="filter-active-count" class="fav-count hidden">0</span>
+      </button>
+      <div id="active-filters" class="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto" style="scrollbar-width:none;">
+        <span style="font-size:12px;color:#3A3A4A;">All Games</span>
+      </div>
+    </div>
+    <!-- Filter panel (positioned relative to the div above) -->
+    <div id="filter-panel" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:100;flex-direction:column;background:var(--surface);border-bottom:2px solid var(--border);box-shadow:0 16px 48px rgba(0,0,0,.5);max-height:62vh;">
+      <div style="padding:10px 14px;border-bottom:1px solid #1E1E2E;flex-shrink:0;position:relative;">
+        <input id="filter-search" type="text" placeholder="Search genres & tags…" autocomplete="off" spellcheck="false"
+          style="width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px 7px 34px;font-size:13px;outline:none;transition:border-color .2s,background .25s;"
+          onfocus="this.style.borderColor='rgba(255,107,26,.45)'" onblur="this.style.borderColor='var(--border)'"/>
+        <svg style="position:absolute;left:26px;top:50%;transform:translateY(-50%);pointer-events:none;" width="14" height="14" fill="none" stroke="#6B6B85" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:12px 14px 16px;">
+        <div style="margin-bottom:16px;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.13em;color:#3A3A4A;margin-bottom:8px;">GENRES</div>
+          <div id="fp-genres" class="flex flex-wrap gap-2"></div>
+          <div id="fp-genres-empty" style="display:none;font-size:12px;color:#3A3A4A;">No genres match</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.13em;color:#3A3A4A;margin-bottom:8px;">TAGS</div>
+          <div id="fp-tags" class="flex flex-wrap gap-2"></div>
+          <div id="fp-tags-empty" style="display:none;font-size:12px;color:#3A3A4A;">No tags match</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MAIN VIEW ═══════════════════════ -->
+<main id="main-view" class="max-w-screen-2xl mx-auto px-4 py-5">
+
+  <!-- Recently Viewed -->
+  <div id="rv-section" class="hidden mb-6">
+    <div class="flex items-center gap-2 mb-3">
+      <div class="w-1 h-5 rounded-full" style="background:#FF6B1A;"></div>
+      <h2 class="text-sm font-bold tracking-wide uppercase" style="color:#9999B0;">Recently Viewed</h2>
+      <button onclick="clearRecentlyViewed()" class="ml-auto text-xs" style="color:#4A4A5A;">Clear</button>
+    </div>
+    <div id="rv-strip" class="flex gap-3 overflow-x-auto pb-1" style="scrollbar-width:none;"></div>
+  </div>
+
+  <!-- Stats bar -->
+  <div class="flex items-center justify-between mb-4">
+    <div class="text-sm" style="color:#6B6B85;"><span id="game-count">Loading…</span></div>
+    <div class="text-xs hidden sm:block" style="color:#3A3A4A;">Click any game for FKNN recommendations</div>
+  </div>
+
+  <!-- Game Grid -->
+  <div id="game-grid" class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));"></div>
+
+  <!-- Loader / End -->
+  <div id="grid-loader" class="flex justify-center py-12"><div class="spinner"></div></div>
+  <div id="grid-end" class="hidden text-center py-8 text-xs" style="color:#252535;">— End of list —</div>
+</main>
+
+<!-- ═══════════════════════ RECOMMENDATION OVERLAY ═══════════════════════ -->
+<div id="rec-overlay" class="hidden fixed inset-0 z-50 flex flex-col" style="background:#0D0D14;">
+
+  <!-- Rec Header -->
+  <div style="background:rgba(13,13,20,.96);backdrop-filter:blur(16px);border-bottom:1px solid #1E1E2E;flex-shrink:0;">
+    <div class="max-w-screen-2xl mx-auto px-4 py-3 flex items-center gap-3 flex-wrap">
+      <button onclick="closeRec()" aria-label="Back to game list"
+        class="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg shrink-0"
+        style="background:#1A1A28;border:1px solid #252535;color:#F5F5FA;transition:opacity .15s"
+        onmouseenter="this.style.opacity='.7'" onmouseleave="this.style.opacity='1'">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        <span class="hidden sm:inline">Back</span>
+      </button>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-bold tracking-widest uppercase" style="color:#FF6B1A;">Fuzzy KNN Recommendations</div>
+        <div id="rec-title" class="text-sm font-bold truncate"></div>
+      </div>
+      <!-- K slider -->
+      <div class="flex items-center gap-2 shrink-0">
+        <span class="text-xs" style="color:#6B6B85;">Results:</span>
+        <input id="k-slider" type="range" min="5" max="24" step="1" value="12"/>
+        <span id="k-label" class="text-xs font-bold w-6 text-center" style="color:#FF8C42;">12</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rec Body -->
+  <div id="rec-body" class="flex-1 overflow-y-auto">
+    <div class="max-w-screen-2xl mx-auto px-4 py-6">
+
+      <!-- Hero card -->
+      <div id="rec-hero" class="mb-8 rounded-2xl overflow-hidden flex flex-col sm:flex-row" style="background:#1A1A28;border:1px solid #252535;max-width:680px;">
+        <div class="sm:w-60 shrink-0" style="background:#13131F;">
+          <img id="rec-hero-img" src="" alt="" class="w-full object-cover" style="aspect-ratio:460/215;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+          <div class="img-placeholder w-full" style="aspect-ratio:460/215;display:none;"></div>
+        </div>
+        <div class="p-5 flex flex-col justify-between min-w-0">
+          <div>
+            <div id="rec-hero-name" class="font-bold text-base leading-tight mb-2"></div>
+            <div id="rec-hero-genres" class="flex flex-wrap gap-1 mb-3"></div>
+            <p id="rec-hero-desc" class="text-xs leading-relaxed line-clamp-2 sm:line-clamp-4" style="color:#9999B0;"></p>
+          </div>
+          <div class="flex items-center gap-3 mt-4">
+            <a id="rec-hero-link" href="#" target="_blank" rel="noopener"
+              class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg"
+              style="background:rgba(255,107,26,.15);border:1px solid rgba(255,107,26,.3);color:#FF8C42;">
+              View on Steam ↗
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section heading -->
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-1 h-6 rounded-full" style="background:#FF6B1A;"></div>
+        <h2 class="text-base font-bold">Similar Games</h2>
+        <div class="text-xs px-2 py-0.5 rounded-full font-semibold" style="background:rgba(255,107,26,.12);color:#FF8C42;border:1px solid rgba(255,107,26,.3);">Fuzzy KNN</div>
+        <div id="rec-cache-badge" class="hidden text-xs px-2 py-0.5 rounded-full" style="background:rgba(34,197,94,.1);color:#22C55E;border:1px solid rgba(34,197,94,.3);">⚡ cached</div>
+      </div>
+
+      <!-- Loading / empty / grid -->
+      <div id="rec-loading" class="flex justify-center py-16"><div class="spinner"></div></div>
+      <div id="rec-grid" class="hidden grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));"></div>
+      <div id="rec-empty" class="hidden text-center py-16 text-sm" style="color:#6B6B85;">No similar games found.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SCROLL TO TOP ═══════════════════════ -->
+<button id="scroll-top" aria-label="Scroll to top"
+  class="fixed bottom-6 right-6 z-40 w-10 h-10 items-center justify-center rounded-full"
+  style="background:#1A1A28;border:1px solid #252535;color:#9999B0;display:none;transition:opacity .2s,transform .2s;box-shadow:0 4px 16px rgba(0,0,0,.4);">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+
+<!-- ═══════════════════════ TOAST ═══════════════════════ -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] hidden pointer-events-none">
+  <div id="toast-msg" class="px-4 py-2 rounded-lg text-sm font-medium"
+    style="background:#1A1A28;border:1px solid #252535;color:#F5F5FA;box-shadow:0 8px 32px rgba(0,0,0,.5);"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let page = 1, loading = false, hasMore = true;
+let activeGenre = '', activeTag = '', searchMode = false;
+let searchDebounce = null;
+let currentRecGame = null;
+
+const RECENTS_KEY = 'fknn_recents';
+const gameRegistry = new Map();
+
+// ── LocalStorage helpers ─────────────────────────────────────────────────────
+function getRecents() {
+  try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveRecent(game) {
+  let recents = getRecents().filter(g => g.appid !== game.appid);
+  recents.unshift({ appid: game.appid, name: game.name, headerImage: game.headerImage, genres: game.genres, tags: game.tags, shortDesc: game.shortDesc });
+  if (recents.length > 8) recents = recents.slice(0, 8);
+  localStorage.setItem(RECENTS_KEY, JSON.stringify(recents));
+}
+function clearRecentlyViewed() {
+  localStorage.removeItem(RECENTS_KEY);
+  renderRecentlyViewed();
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Genre → color mapping
+const GENRE_COLORS = {
+  'action':               '#EF4444',
+  'adventure':            '#10B981',
+  'rpg':                  '#8B5CF6',
+  'strategy':             '#06B6D4',
+  'simulation':           '#F59E0B',
+  'sports':               '#22C55E',
+  'racing':               '#F97316',
+  'casual':               '#EC4899',
+  'indie':                '#818CF8',
+  'free to play':         '#14B8A6',
+  'massively multiplayer':'#EAB308',
+  'early access':         '#FF6B1A',
+  'animation & modeling': '#A78BFA',
+  'audio production':     '#F472B6',
+  'design & illustration':'#34D399',
+  'education':            '#60A5FA',
+  'software training':    '#7DD3FC',
+};
+function genreColor(g) {
+  return GENRE_COLORS[g.toLowerCase()] || '#6B6B85';
+}
+function tagChip(text, colored = false) {
+  const col = colored ? genreColor(text) : '#FF8C42';
+  const bg  = colored ? col + '18' : 'rgba(255,107,26,.1)';
+  const bdr = colored ? col + '44' : 'rgba(255,107,26,.25)';
+  return `<span style="background:${bg};border:1px solid ${bdr};color:${col};padding:2px 7px;border-radius:99px;font-size:10px;white-space:nowrap;">${esc(text)}</span>`;
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+// ═══════════════════════════════════════════════════════
+// THEME TOGGLE
+// ═══════════════════════════════════════════════════════
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem('fknn_theme', theme);
+  document.getElementById('theme-icon-moon').classList.toggle('hidden', theme === 'light');
+  document.getElementById('theme-icon-sun').classList.toggle('hidden', theme === 'dark');
+}
+applyTheme(localStorage.getItem('fknn_theme') || 'dark');
+document.getElementById('theme-btn').addEventListener('click', () => {
+  applyTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+});
+
+// ═══════════════════════════════════════════════════════
+// FILTER PANEL
+// ═══════════════════════════════════════════════════════
+let allGenres = [], allTags = [], filterPanelOpen = false;
+
+async function loadFilters() {
+  try {
+    const [genres, tags] = await Promise.all([
+      fetch('/api/genres').then(r => r.json()),
+      fetch('/api/tags').then(r => r.json()),
+    ]);
+    allGenres = genres;
+    allTags = tags;
+    renderFilterPanel('');
+  } catch {}
+}
+
+function renderFilterPanel(query) {
+  const q = query.toLowerCase();
+  const genres = q ? allGenres.filter(g => g.toLowerCase().includes(q)) : allGenres;
+  const tags   = q ? allTags.filter(t => t.toLowerCase().includes(q))   : allTags;
+
+  const fpG = document.getElementById('fp-genres');
+  const fpT = document.getElementById('fp-tags');
+
+  fpG.innerHTML = genres.map(g => {
+    const isActive = activeGenre === g;
+    const col = genreColor(g);
+    const bg  = isActive ? col + '22' : 'rgba(255,255,255,.04)';
+    const bdr = isActive ? col + '77' : '#252535';
+    const clr = isActive ? col : '#9999B0';
+    return `<button class="fp-chip${isActive?' fp-active-genre':''}" data-genre="${esc(g)}"
+      style="background:${bg};border-color:${bdr};color:${clr};">${esc(g)}</button>`;
+  }).join('');
+
+  fpT.innerHTML = tags.map(t => {
+    const isActive = activeTag === t;
+    const bg  = isActive ? 'rgba(6,182,212,.15)' : 'rgba(255,255,255,.04)';
+    const bdr = isActive ? 'rgba(6,182,212,.5)'  : '#252535';
+    const clr = isActive ? '#06B6D4' : '#9999B0';
+    return `<button class="fp-chip${isActive?' fp-active-tag':''}" data-tag="${esc(t)}"
+      style="background:${bg};border-color:${bdr};color:${clr};">${esc(t)}</button>`;
+  }).join('');
+
+  document.getElementById('fp-genres-empty').style.display = genres.length ? 'none' : 'block';
+  document.getElementById('fp-tags-empty').style.display   = tags.length   ? 'none' : 'block';
+}
+
+function openFilterPanel() {
+  filterPanelOpen = true;
+  const panel = document.getElementById('filter-panel');
+  panel.style.display = 'flex';
+  const btn = document.getElementById('filter-btn');
+  btn.style.borderColor = 'rgba(255,107,26,.5)';
+  btn.style.color = '#FF8C42';
+  document.getElementById('filter-search').focus();
+}
+
+function closeFilterPanel() {
+  filterPanelOpen = false;
+  document.getElementById('filter-panel').style.display = 'none';
+  const hasFilter = activeGenre || activeTag;
+  const btn = document.getElementById('filter-btn');
+  btn.style.borderColor = hasFilter ? 'rgba(255,107,26,.4)' : '#252535';
+  btn.style.color = hasFilter ? '#FF8C42' : '#9999B0';
+}
+
+document.getElementById('filter-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  filterPanelOpen ? closeFilterPanel() : openFilterPanel();
+});
+
+document.addEventListener('click', e => {
+  if (!filterPanelOpen) return;
+  const wrap = document.getElementById('filter-bar-wrap');
+  if (!wrap.contains(e.target)) closeFilterPanel();
+});
+
+document.getElementById('filter-search').addEventListener('input', e => {
+  renderFilterPanel(e.target.value);
+});
+
+document.getElementById('filter-panel').addEventListener('click', e => {
+  const chip = e.target.closest('.fp-chip');
+  if (!chip) return;
+  if ('genre' in chip.dataset) {
+    activeGenre = activeGenre === chip.dataset.genre ? '' : chip.dataset.genre;
+  } else if ('tag' in chip.dataset) {
+    activeTag = activeTag === chip.dataset.tag ? '' : chip.dataset.tag;
+  }
+  renderFilterPanel(document.getElementById('filter-search').value);
+  updateActiveFilters();
+  closeFilterPanel();
+  searchMode = false;
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  resetGrid();
+});
+
+function updateActiveFilters() {
+  const container = document.getElementById('active-filters');
+  const badge = document.getElementById('filter-active-count');
+  let count = 0;
+  container.innerHTML = '';
+
+  if (activeGenre) {
+    count++;
+    const col = genreColor(activeGenre);
+    container.insertAdjacentHTML('beforeend',
+      `<span style="display:inline-flex;align-items:center;gap:4px;background:${col}18;border:1px solid ${col}44;color:${col};padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap;">
+        ${esc(activeGenre)}
+        <button onclick="clearGenreFilter()" style="opacity:.65;line-height:1;">×</button>
+      </span>`);
+  }
+  if (activeTag) {
+    count++;
+    container.insertAdjacentHTML('beforeend',
+      `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.35);color:#06B6D4;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap;">
+        ${esc(activeTag)}
+        <button onclick="clearTagFilter()" style="opacity:.65;line-height:1;">×</button>
+      </span>`);
+  }
+  if (!count) {
+    container.innerHTML = '<span style="font-size:12px;color:#3A3A4A;">All Games</span>';
+  } else if (activeGenre && activeTag) {
+    container.insertAdjacentHTML('beforeend',
+      `<button onclick="clearAllFilters()" style="font-size:11px;color:#4A4A5A;padding:2px 6px;border-radius:4px;white-space:nowrap;" onmouseenter="this.style.color='#9999B0'" onmouseleave="this.style.color='#4A4A5A'">Clear all</button>`);
+  }
+
+  if (count) { badge.textContent = count; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+}
+
+function clearGenreFilter() {
+  activeGenre = '';
+  updateActiveFilters();
+  renderFilterPanel(document.getElementById('filter-search').value);
+  resetGrid();
+}
+function clearTagFilter() {
+  activeTag = '';
+  updateActiveFilters();
+  renderFilterPanel(document.getElementById('filter-search').value);
+  resetGrid();
+}
+function clearAllFilters() {
+  activeGenre = ''; activeTag = '';
+  updateActiveFilters();
+  renderFilterPanel(document.getElementById('filter-search').value);
+  resetGrid();
+}
+
+
+// ═══════════════════════════════════════════════════════
+// RECENTLY VIEWED
+// ═══════════════════════════════════════════════════════
+function renderRecentlyViewed() {
+  const recents = getRecents();
+  const section = document.getElementById('rv-section');
+  const strip   = document.getElementById('rv-strip');
+  if (!recents.length) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  strip.innerHTML = '';
+  recents.forEach(g => {
+    const div = document.createElement('div');
+    div.className = 'rv-card shrink-0 rounded-lg overflow-hidden cursor-pointer';
+    div.style.cssText = 'width:120px;border:1px solid #252535;background:#1A1A28;';
+    div.innerHTML = `
+      <div style="aspect-ratio:460/215;background:#13131F;overflow:hidden;">
+        <img src="${esc(g.headerImage)}" alt="${esc(g.name)}" loading="lazy"
+          style="width:100%;height:100%;object-fit:cover;display:block;"
+          onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+        <div class="img-placeholder" style="position:absolute;inset:0;display:none;font-size:9px;">${esc(g.name)}</div>
+      </div>
+      <div style="padding:5px 6px;"><div style="font-size:10px;font-weight:600;color:#C0C0D0;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${esc(g.name)}</div></div>
+    `;
+    div.addEventListener('click', () => openRec(g));
+    strip.appendChild(div);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// SKELETON LOADERS
+// ═══════════════════════════════════════════════════════
+function showSkeletons(count = 20) {
+  const grid = document.getElementById('game-grid');
+  for (let i = 0; i < count; i++) {
+    const div = document.createElement('div');
+    div.className = 'skeleton';
+    div.innerHTML = `
+      <div class="shimmer" style="aspect-ratio:460/215;"></div>
+      <div style="padding:10px 12px 12px;">
+        <div class="shimmer" style="height:13px;border-radius:4px;margin-bottom:8px;width:75%;"></div>
+        <div class="shimmer" style="height:10px;border-radius:4px;width:55%;"></div>
+      </div>`;
+    grid.appendChild(div);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// GAME CARD
+// ═══════════════════════════════════════════════════════
+function gameCard(g, animate = false) {
+  gameRegistry.set(g.appid, g);
+  const genreArr = (g.genres || '').split(';').slice(0, 2).map(s => s.trim()).filter(Boolean);
+  const tagsArr  = (g.tags   || '').split(';').slice(0, 3).map(s => s.trim()).filter(Boolean);
+
+  const div = document.createElement('div');
+  div.className = 'card-hover rounded-xl overflow-hidden relative' + (animate ? ' slide-up' : '');
+  div.style.cssText = 'background:#1A1A28;border:1px solid #252535;';
+  div.dataset.appid = g.appid;
+
+  // Genre label color
+  const genreLabel = genreArr.map(gn => `<span style="color:${genreColor(gn)};font-size:10px;font-weight:600;">${esc(gn)}</span>`).join('<span style="color:#4A4A5A;font-size:10px;"> · </span>');
+
+  div.innerHTML = `
+    <div style="position:relative;aspect-ratio:460/215;overflow:hidden;background:#13131F;">
+      <img src="${esc(g.headerImage)}" alt="${esc(g.name)}" loading="lazy"
+        style="width:100%;height:100%;object-fit:cover;display:block;"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+      <div class="img-placeholder" style="position:absolute;inset:0;display:none;">${esc(g.name)}</div>
+
+      <!-- Hover description overlay -->
+      <div class="card-desc-overlay">
+        <div style="font-size:10px;font-weight:600;margin-bottom:4px;color:#FF8C42;">${genreLabel}</div>
+        <p style="font-size:10px;color:#C0C0D0;line-height:1.45;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;">${esc(g.shortDesc || '')}</p>
+      </div>
+
+      <!-- Genre badge bottom-left (visible without hover) -->
+      ${genreArr.length ? `<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(13,13,20,.85));padding:16px 8px 6px;pointer-events:none;">${genreLabel}</div>` : ''}
+    </div>
+    <div style="padding:10px 12px 12px;">
+      <div class="font-semibold text-sm leading-tight mb-2 line-clamp-2" style="color:#F5F5FA;">${esc(g.name)}</div>
+      <div class="flex flex-wrap gap-1">
+        ${tagsArr.map(t => tagChip(t)).join('')}
+      </div>
+    </div>`;
+
+  div.addEventListener('click', () => openRec(g));
+  return div;
+}
+
+// ═══════════════════════════════════════════════════════
+// RECOMMENDATION CARD
+// ═══════════════════════════════════════════════════════
+function recCard(rec, maxScore) {
+  const g = rec.game;
+  const score = rec.score;
+  const pct = Math.min(100, Math.round((score / Math.max(maxScore, 0.001)) * 100));
+  const scoreColor = pct >= 75 ? '#22C55E' : pct >= 50 ? '#F59E0B' : '#FF6B1A';
+  const genreArr = (g.genres||'').split(';').slice(0,2).map(s=>s.trim()).filter(Boolean);
+  const whySimilar = (rec.whySimilar || []).slice(0, 3);
+
+  const div = document.createElement('div');
+  div.className = 'card-hover rounded-xl overflow-hidden slide-up';
+  div.style.cssText = 'background:#1A1A28;border:1px solid #252535;';
+
+  div.innerHTML = `
+    <div style="position:relative;aspect-ratio:460/215;overflow:hidden;background:#13131F;">
+      <img src="${esc(g.headerImage)}" alt="${esc(g.name)}" loading="lazy"
+        style="width:100%;height:100%;object-fit:cover;display:block;"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+      <div class="img-placeholder" style="position:absolute;inset:0;display:none;">${esc(g.name)}</div>
+      <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(13,13,20,.85));padding:16px 8px 6px;pointer-events:none;">
+        <span style="font-size:10px;font-weight:600;color:${genreColor(genreArr[0]||'')};">${genreArr.map(esc).join(' · ')}</span>
+      </div>
+      <!-- Score badge -->
+      <div style="position:absolute;top:7px;right:7px;background:rgba(13,13,20,.82);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px 7px;">
+        <span style="font-size:11px;font-weight:700;color:${scoreColor};">${score.toFixed(1)}%</span>
+      </div>
+    </div>
+    <div style="padding:10px 12px 12px;">
+      <div class="font-semibold text-sm leading-tight mb-2 line-clamp-2" style="color:#F5F5FA;">${esc(g.name)}</div>
+      <!-- Score bar -->
+      <div style="height:3px;background:#1E1E2E;border-radius:2px;overflow:hidden;margin-bottom:8px;">
+        <div class="score-bar-fill" style="height:100%;width:0;background:linear-gradient(90deg,${scoreColor},${scoreColor}88);border-radius:2px;" data-pct="${pct}"></div>
+      </div>
+      <!-- Why similar tags -->
+      ${whySimilar.length ? `
+        <div class="flex flex-wrap gap-1 mb-2">
+          <span style="font-size:9px;font-weight:600;color:#4A4A5A;padding:2px 0;white-space:nowrap;">WHY:</span>
+          ${whySimilar.map(t => `<span style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);color:#6EE7B7;padding:1px 6px;border-radius:99px;font-size:9px;white-space:nowrap;">${esc(t)}</span>`).join('')}
+        </div>` : ''}
+    </div>`;
+
+  div.addEventListener('click', () => openRec(g));
+  return div;
+}
+
+// ═══════════════════════════════════════════════════════
+// LOAD GAMES
+// ═══════════════════════════════════════════════════════
+function resetGrid() {
+  page = 1; hasMore = true; loading = false;
+  const grid = document.getElementById('game-grid');
+  grid.innerHTML = '';
+  document.getElementById('grid-end').classList.add('hidden');
+  document.getElementById('grid-loader').classList.remove('hidden');
+  showSkeletons(20);
+  loadPage();
+}
+
+async function loadPage() {
+  if (loading || !hasMore || searchMode) return;
+  loading = true;
+  try {
+    const url = `/api/games?page=${page}&limit=40${activeGenre ? '&genre='+encodeURIComponent(activeGenre) : ''}${activeTag ? '&tag='+encodeURIComponent(activeTag) : ''}`;
+    const data = await fetch(url).then(r => r.json());
+
+    // Remove skeletons on first page
+    if (page === 1) {
+      document.getElementById('game-grid').innerHTML = '';
+    }
+
+    const grid = document.getElementById('game-grid');
+    data.games.forEach((g, i) => {
+      const card = gameCard(g, true);
+      card.style.animationDelay = (i % 40 * 18) + 'ms';
+      grid.appendChild(card);
+    });
+
+    hasMore = data.hasMore;
+    document.getElementById('game-count').textContent = `${data.total.toLocaleString()} games`;
+    document.getElementById('grid-loader').classList.toggle('hidden', !hasMore);
+    if (!hasMore) document.getElementById('grid-end').classList.remove('hidden');
+    page++;
+  } catch {
+    showToast('Failed to load games');
+  } finally {
+    loading = false;
+  }
+}
+
+// Infinite scroll observer
+const observer = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting && !searchMode && !loading) loadPage();
+}, { rootMargin: '300px' });
+observer.observe(document.getElementById('grid-loader'));
+
+// ═══════════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════════
+document.getElementById('search-input').addEventListener('input', e => {
+  const q = e.target.value.trim();
+  document.getElementById('search-clear').style.display = q ? 'flex' : 'none';
+  clearTimeout(searchDebounce);
+  if (!q) {
+    searchMode = false;
+    resetGrid();
+    return;
+  }
+  searchDebounce = setTimeout(() => doSearch(q), 280);
+});
+
+document.getElementById('search-clear').addEventListener('click', () => {
+  const inp = document.getElementById('search-input');
+  inp.value = '';
+  inp.dispatchEvent(new Event('input'));
+  inp.focus();
+});
+
+async function doSearch(q) {
+  searchMode = true;
+  const grid = document.getElementById('game-grid');
+  grid.innerHTML = '';
+  document.getElementById('grid-loader').classList.remove('hidden');
+  document.getElementById('grid-end').classList.add('hidden');
+  showSkeletons(12);
+  try {
+    const results = await fetch(`/api/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+    grid.innerHTML = '';
+    results.forEach((g, i) => {
+      const card = gameCard(g, true);
+      card.style.animationDelay = (i * 18) + 'ms';
+      grid.appendChild(card);
+    });
+    document.getElementById('game-count').textContent = `${results.length} results for "${q}"`;
+    document.getElementById('grid-loader').classList.add('hidden');
+    if (!results.length) {
+      grid.innerHTML = `<div class="col-span-full text-center py-16" style="color:#6B6B85;">No games found for "<strong>${esc(q)}</strong>"</div>`;
+    }
+  } catch {
+    showToast('Search failed');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════
+// RECOMMENDATION OVERLAY
+// ═══════════════════════════════════════════════════════
+let currentK = 12;
+
+document.getElementById('k-slider').addEventListener('input', e => {
+  currentK = parseInt(e.target.value);
+  document.getElementById('k-label').textContent = currentK;
+  if (currentRecGame) loadRecs(currentRecGame);
+});
+
+async function openRec(game) {
+  currentRecGame = game;
+  gameRegistry.set(game.appid, game);
+  saveRecent(game);
+  renderRecentlyViewed();
+  document.title = `FKNN: ${game.name}`;
+
+  // Reset K slider to default each time a new game is opened
+  currentK = 12;
+  document.getElementById('k-slider').value = '12';
+  document.getElementById('k-label').textContent = '12';
+
+  const overlay = document.getElementById('rec-overlay');
+  overlay.classList.remove('hidden', 'closing');
+  void overlay.offsetWidth; // force reflow
+  overlay.classList.add('rec-overlay');
+  document.body.style.overflow = 'hidden';
+
+  // Fill hero
+  document.getElementById('rec-title').textContent = game.name;
+  document.getElementById('rec-hero-name').textContent = game.name;
+  document.getElementById('rec-hero-desc').textContent = game.shortDesc || '';
+  document.getElementById('rec-hero-link').href = `https://store.steampowered.com/app/${game.appid}/`;
+
+  const heroImg = document.getElementById('rec-hero-img');
+  heroImg.src = game.headerImage || '';
+  heroImg.style.display = 'block';
+  heroImg.nextElementSibling.style.display = 'none';
+
+  const genresEl = document.getElementById('rec-hero-genres');
+  genresEl.innerHTML = '';
+  (game.genres || '').split(';').map(s => s.trim()).filter(Boolean).forEach(g => {
+    genresEl.insertAdjacentHTML('beforeend', tagChip(g, true));
+    genresEl.insertAdjacentText('beforeend', ' ');
+  });
+
+  document.getElementById('rec-body').scrollTop = 0;
+  document.getElementById('rec-cache-badge').classList.add('hidden');
+
+  await loadRecs(game);
+}
+
+async function loadRecs(game) {
+  document.getElementById('rec-loading').classList.remove('hidden');
+  document.getElementById('rec-grid').classList.add('hidden');
+  document.getElementById('rec-empty').classList.add('hidden');
+  document.getElementById('rec-grid').innerHTML = '';
+
+  try {
+    const t0 = performance.now();
+    const recs = await fetch(`/api/recommend/${game.appid}?k=${currentK}`).then(r => r.json());
+    const elapsed = performance.now() - t0;
+
+    document.getElementById('rec-loading').classList.add('hidden');
+    document.getElementById('rec-cache-badge').classList.toggle('hidden', elapsed > 30);
+
+    if (!recs.length) { document.getElementById('rec-empty').classList.remove('hidden'); return; }
+
+    const grid = document.getElementById('rec-grid');
+    grid.classList.remove('hidden');
+    const maxScore = recs[0]?.score || 1;
+
+    recs.forEach((rec, i) => {
+      const card = recCard(rec, maxScore);
+      card.style.animationDelay = (i * 40) + 'ms';
+      grid.appendChild(card);
+    });
+
+    // Animate score bars after a tick
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        grid.querySelectorAll('.score-bar-fill').forEach(bar => {
+          bar.style.width = bar.dataset.pct + '%';
+        });
+      }, 80);
+    });
+
+  } catch {
+    document.getElementById('rec-loading').classList.add('hidden');
+    showToast('Failed to load recommendations');
+  }
+}
+
+function closeRec() {
+  const overlay = document.getElementById('rec-overlay');
+  if (overlay.classList.contains('hidden')) return;
+  overlay.classList.add('closing');
+  setTimeout(() => {
+    overlay.classList.add('hidden');
+    overlay.classList.remove('closing', 'rec-overlay');
+    document.body.style.overflow = '';
+    currentRecGame = null;
+    document.title = 'FKNN Game Recommender';
+  }, 280);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (filterPanelOpen) { closeFilterPanel(); return; }
+    closeRec();
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  document.getElementById('toast-msg').textContent = msg;
+  const t = document.getElementById('toast');
+  t.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), 2800);
+}
+
+// ═══════════════════════════════════════════════════════
+// SCROLL TO TOP
+// ═══════════════════════════════════════════════════════
+const scrollTopBtn = document.getElementById('scroll-top');
+window.addEventListener('scroll', () => {
+  const show = window.scrollY > 320;
+  scrollTopBtn.style.display = show ? 'flex' : 'none';
+  scrollTopBtn.style.opacity = show ? '1' : '0';
+}, { passive: true });
+scrollTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+renderRecentlyViewed();
+loadFilters();
+resetGrid();
+</script>
+
+</body>
+</html>
