@@ -117,7 +117,9 @@ git push
 
 ## Dataset
 
-The dataset is derived from the Steam store and preprocessed into TF-IDF feature vectors. Each game has:
+Source: **[Steam Store Games — Nik Davis](https://www.kaggle.com/datasets/nikdavis/steam-store-games)** (Kaggle)
+
+The raw dataset was preprocessed into TF-IDF feature vectors for use with the FKNN engine. Each game entry contains:
 - **Metadata**: App ID, name, genres, tags, header image URL, short description
 - **Features**: 352-dimensional TF-IDF sparse vector (avg ~30 non-zero values per game)
 
