@@ -218,8 +218,8 @@ const MIME = {
   '.css': 'text/css',
 };
 
-// ── HTTP server ──────────────────────────────────────────────────────────────
-const server = http.createServer((req, res) => {
+// ── Request handler (exported for Vercel, used locally via http.createServer) ─
+export default function handler(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p = url.pathname;
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -289,8 +289,10 @@ const server = http.createServer((req, res) => {
     res.writeHead(404);
     res.end('Not found');
   }
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`\n  FKNN Game Recommender -> http://localhost:${PORT}\n`);
-});
+if (!process.env.VERCEL) {
+  http.createServer(handler).listen(PORT, () => {
+    console.log(`\n  FKNN Game Recommender -> http://localhost:${PORT}\n`);
+  });
+}

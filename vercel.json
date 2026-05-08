@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "functions": {
+    "serve.mjs": {
+      "includeFiles": "assets/**",
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/serve.mjs" }
+  ]
+}
