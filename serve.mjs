@@ -99,7 +99,7 @@ function cacheSet(key, val) {
 }
 
 // ── Fuzzy KNN with inverted index ───────────────────────────────────────────
-function recommend(appid, k = 12) {
+function recommend(appid, k = 10) {
   const cacheKey = `${appid}:${k}`;
   if (recCache.has(cacheKey)) return recCache.get(cacheKey);
 
@@ -109,25 +109,38 @@ function recommend(appid, k = 12) {
   const scores = new Float32Array(games.length);
   const queryGame = games[gIdx];
 
+  // Step 1: hitung cosine similarity semua game vs query (via dot product sparse)
   queryGame.sparse.forEach(({ idx, val }) => {
     invertedIndex[idx].forEach(({ gIdx: dIdx, val: dVal }) => { scores[dIdx] += val * dVal; });
   });
   scores[gIdx] = -1;
 
-  // Collect candidates above threshold
-  const top = [];
-  for (let i = 0; i < games.length; i++) { if (scores[i] > 0.01) top.push(i); }
-  top.sort((a, b) => scores[b] - scores[a]);
-  const topK = top.slice(0, k);
+  // Step 2: filter kandidat (cosine > 0.01), lalu ambil 20 tetangga terdekat
+  const candidates = [];
+  for (let i = 0; i < games.length; i++) { if (scores[i] > 0.01) candidates.push(i); }
+  candidates.sort((a, b) => scores[b] - scores[a]);
+  const neighbors = candidates.slice(0, 20);
+
+  // Step 3: hitung totalCos dari 20 tetangga
+  const totalCos = neighbors.reduce((sum, i) => sum + scores[i], 0);
+
+  // Step 4 & 5: hitung fknnScore = u_i * cosine_i, di mana u_i = cosine_i / totalCos
+  const fknnNeighbors = neighbors.map(i => ({
+    idx: i,
+    fknnScore: totalCos > 0 ? (scores[i] / totalCos) * scores[i] : 0,
+  }));
+
+  // Step 6: urutkan berdasarkan fknnScore, ambil top-k (10)
+  fknnNeighbors.sort((a, b) => b.fknnScore - a.fknnScore);
+  const topK = fknnNeighbors.slice(0, k);
 
   // Build query feature map for "Why similar"
   const qFeatureMap = new Map();
   queryGame.sparse.forEach(({ idx, val }) => qFeatureMap.set(idx, val));
 
-  const result = topK.map(i => {
+  const result = topK.map(({ idx: i, fknnScore }) => {
     const g = games[i];
 
-    // Top shared TF-IDF features (weighted by joint contribution)
     const shared = [];
     g.sparse.forEach(({ idx, val }) => {
       if (qFeatureMap.has(idx)) {
@@ -137,7 +150,7 @@ function recommend(appid, k = 12) {
     shared.sort((a, b) => b.score - a.score);
     const whySimilar = shared.slice(0, 4).map(f => f.name);
 
-    return { game: safeGame(g), score: Math.round(scores[i] * 1000) / 10, whySimilar };
+    return { game: safeGame(g), score: Math.round(fknnScore * 1000) / 10, whySimilar };
   });
 
   cacheSet(cacheKey, result);
