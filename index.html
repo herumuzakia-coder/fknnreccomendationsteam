@@ -862,7 +862,7 @@ async function loadRecs(game) {
 
   try {
     const t0 = performance.now();
-    const recs = await fetch(`/api/recommend/${game.appid}?k=12`, { signal }).then(r => r.json());
+    const recs = await fetch(`/api/recommend/${game.appid}?k=10`, { signal }).then(r => r.json());
     const elapsed = performance.now() - t0;
 
     document.getElementById('rec-loading').classList.add('hidden');
