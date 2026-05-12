@@ -824,6 +824,7 @@ async function doSearch(q) {
 // RECOMMENDATION OVERLAY
 // ═══════════════════════════════════════════════════════
 let currentK = 12;
+let recAbortController = null;
 
 document.getElementById('k-slider').addEventListener('input', e => {
   currentK = parseInt(e.target.value);
@@ -878,14 +879,17 @@ async function openRec(game) {
 }
 
 async function loadRecs(game) {
+  if (recAbortController) recAbortController.abort();
+  recAbortController = new AbortController();
+  const signal = recAbortController.signal;
+
   document.getElementById('rec-loading').classList.remove('hidden');
   document.getElementById('rec-grid').classList.add('hidden');
   document.getElementById('rec-empty').classList.add('hidden');
-  document.getElementById('rec-grid').innerHTML = '';
 
   try {
     const t0 = performance.now();
-    const recs = await fetch(`/api/recommend/${game.appid}?k=${currentK}`).then(r => r.json());
+    const recs = await fetch(`/api/recommend/${game.appid}?k=${currentK}`, { signal }).then(r => r.json());
     const elapsed = performance.now() - t0;
 
     document.getElementById('rec-loading').classList.add('hidden');
@@ -894,6 +898,7 @@ async function loadRecs(game) {
     if (!recs.length) { document.getElementById('rec-empty').classList.remove('hidden'); return; }
 
     const grid = document.getElementById('rec-grid');
+    grid.innerHTML = '';
     grid.classList.remove('hidden');
     const maxScore = recs[0]?.score || 1;
 
@@ -912,7 +917,8 @@ async function loadRecs(game) {
       }, 80);
     });
 
-  } catch {
+  } catch (err) {
+    if (err.name === 'AbortError') return;
     document.getElementById('rec-loading').classList.add('hidden');
     showToast('Failed to load recommendations');
   }
