@@ -828,6 +828,10 @@ let currentK = 12;
 document.getElementById('k-slider').addEventListener('input', e => {
   currentK = parseInt(e.target.value);
   document.getElementById('k-label').textContent = currentK;
+});
+
+document.getElementById('k-slider').addEventListener('change', e => {
+  currentK = parseInt(e.target.value);
   if (currentRecGame) loadRecs(currentRecGame);
 });
 
