@@ -151,7 +151,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 [data-theme="light"] #scroll-top{background:var(--card)!important;border-color:var(--border)!important;color:var(--text-dim)!important}
 
 /* ── Light mode why-tag override ── */
-[data-theme="light"] .why-tag{background:rgba(22,163,74,.12)!important;border-color:rgba(22,163,74,.35)!important;color:#15803d!important}
+[data-theme="light"] .why-tag{background:rgba(6,182,212,.12)!important;border-color:rgba(6,182,212,.4)!important;color:#0891b2!important}
 [data-theme="light"] .why-label{color:#6b7280!important}
 
 /* misc */
@@ -714,7 +714,7 @@ function recCard(rec, maxScore) {
       ${whySimilar.length ? `
         <div class="flex flex-wrap gap-1 mb-2">
           <span class="why-label" style="font-size:9px;font-weight:600;color:#4A4A5A;padding:2px 0;white-space:nowrap;">WHY:</span>
-          ${whySimilar.map(t => `<span class="why-tag" style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);color:#6EE7B7;padding:1px 6px;border-radius:99px;font-size:9px;white-space:nowrap;">${esc(t)}</span>`).join('')}
+          ${whySimilar.map(t => `<span class="why-tag" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);color:#22d3ee;padding:1px 6px;border-radius:99px;font-size:9px;white-space:nowrap;">${esc(t)}</span>`).join('')}
         </div>` : ''}
     </div>`;
 
