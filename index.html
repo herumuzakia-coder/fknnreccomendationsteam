@@ -222,7 +222,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
     <div id="filter-panel" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:100;flex-direction:column;background:var(--surface);border-bottom:2px solid var(--border);box-shadow:0 16px 48px rgba(0,0,0,.5);max-height:62vh;">
       <div style="padding:10px 14px;border-bottom:1px solid #1E1E2E;flex-shrink:0;position:relative;">
         <input id="filter-search" type="text" placeholder="Search genres & tags…" autocomplete="off" spellcheck="false"
-          style="width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px 7px 34px;font-size:13px;outline:none;transition:border-color .2s,background .25s;"
+          style="width:100%;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px 7px 34px;font-size:16px;outline:none;transition:border-color .2s,background .25s;"
           onfocus="this.style.borderColor='rgba(255,107,26,.45)'" onblur="this.style.borderColor='var(--border)'"/>
         <svg style="position:absolute;left:26px;top:50%;transform:translateY(-50%);pointer-events:none;" width="14" height="14" fill="none" stroke="#6B6B85" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       </div>
@@ -484,7 +484,7 @@ function openFilterPanel() {
   const btn = document.getElementById('filter-btn');
   btn.style.borderColor = 'rgba(255,107,26,.5)';
   btn.style.color = '#FF8C42';
-  document.getElementById('filter-search').focus();
+  if (window.innerWidth >= 640) document.getElementById('filter-search').focus();
 }
 
 function closeFilterPanel() {
