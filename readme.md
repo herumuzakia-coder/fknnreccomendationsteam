@@ -1,6 +1,8 @@
 # FKNN Steam Game Recommender
 
-A fast, lightweight Steam game recommendation system powered by **Fuzzy K-Nearest Neighbor (FKNN)** similarity search over TF-IDF feature vectors. Built with vanilla JavaScript and a zero-dependency Node.js server.
+A fast, lightweight Steam game recommendation system powered by **Fuzzy K-Nearest Neighbor (FKNN)** similarity search over normalized community-vote tag vectors. Built with vanilla JavaScript and a zero-dependency Node.js server.
+
+> **Note on features:** The recommendation engine (`serve.mjs`) operates on **Min-Max normalized community-vote tag vectors** (26,548 × 352), L2-normalized at load time. The TF-IDF matrix (`tfidf_matrix.npz`) is a separate artifact used **only for exploratory analysis** during preprocessing and is **not** consumed by the live recommender.
 
 **Live Demo → [fknnreccomendationsteam.vercel.app](https://fknnreccomendationsteam.vercel.app)**
 
@@ -9,7 +11,7 @@ A fast, lightweight Steam game recommendation system powered by **Fuzzy K-Neares
 ## Features
 
 - **FKNN Recommendations** — Click any game to instantly get similar titles ranked by cosine similarity
-- **Why Similar** — Each recommendation shows the shared TF-IDF features that drive the match
+- **Why Similar** — Each recommendation shows the shared tag features that drive the match
 - **Fuzzy Search** — Trigram-based search with prefix and substring matching across 26,000+ games
 - **Genre & Tag Filtering** — Searchable dropdown panel filters the catalog by genre or tag (combinable)
 - **Light / Dark Mode** — Persisted per-browser via localStorage
@@ -21,9 +23,9 @@ A fast, lightweight Steam game recommendation system powered by **Fuzzy K-Neares
 
 ## Algorithm
 
-### TF-IDF + Cosine Similarity
+### Vote-Normalized Tag Vectors + Cosine Similarity
 
-Each game is represented as a sparse TF-IDF vector computed from its tags, genres, and metadata. Only non-zero features are stored (`sparse` array per game).
+Each game is represented as a sparse vector of **Min-Max normalized community-vote weights** over 352 active tags. Only non-zero features are stored (`sparse` array per game), and each vector is L2-normalized at load time so that cosine similarity reduces to a direct dot product. (A TF-IDF representation was also computed during preprocessing, but it is used only for exploratory tag analysis — see Dataset section.)
 
 ### Inverted Index
 
@@ -47,8 +49,8 @@ Cold query: ~120ms. Warm (cached): ~1ms.
 |---|---|
 | Frontend | Vanilla JS, Tailwind CSS (CDN) |
 | Backend | Node.js (built-in `http` module) |
-| Algorithm | FKNN via TF-IDF sparse vectors + inverted index |
-| Dataset | Steam games — 26,548 titles, 352 TF-IDF features |
+| Algorithm | FKNN via vote-normalized tag vectors + inverted index |
+| Dataset | Steam games — 26,548 titles, 352 normalized tag features |
 | Deployment | Vercel (serverless) |
 | PWA | Web App Manifest + Service Worker |
 
@@ -63,9 +65,9 @@ Cold query: ~120ms. Warm (cached): ~1ms.
 ├── manifest.json          # PWA manifest
 ├── vercel.json            # Vercel deployment config
 ├── assets/
-│   ├── steam_preprocessed.csv   # 26K games with TF-IDF features (48 MB)
+│   ├── steam_preprocessed.csv   # 26K games with normalized tag-vote features (48 MB)
 │   ├── game_index.csv            # Game metadata index
-│   ├── tfidf_matrix.npz          # Source TF-IDF matrix (NumPy)
+│   ├── tfidf_matrix.npz          # TF-IDF matrix (NumPy) — exploratory analysis only, not used by the recommender
 │   └── logo.png                  # App logo
 └── screenshot.mjs         # Puppeteer screenshot utility (dev only)
 ```
@@ -119,9 +121,11 @@ git push
 
 Source: **[Steam Store Games — Nik Davis](https://www.kaggle.com/datasets/nikdavis/steam-store-games)** (Kaggle)
 
-The raw dataset was preprocessed into TF-IDF feature vectors for use with the FKNN engine. Each game entry contains:
+The raw dataset was preprocessed into **Min-Max normalized community-vote tag vectors** for use with the FKNN engine. Each game entry contains:
 - **Metadata**: App ID, name, genres, tags, header image URL, short description
-- **Features**: 352-dimensional TF-IDF sparse vector (avg ~30 non-zero values per game)
+- **Features**: 352-dimensional normalized tag-vote sparse vector (avg ~30 non-zero values per game), L2-normalized at load time
+
+A separate TF-IDF matrix (26,548 × 339) was also derived from the same tags for **exploratory tag-importance analysis only**; it is not used by the recommendation engine.
 
 ---
 

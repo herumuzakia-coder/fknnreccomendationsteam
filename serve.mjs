@@ -273,7 +273,7 @@ export default function handler(req, res) {
 
   if (p.startsWith('/api/recommend/')) {
     const appid = p.split('/').pop();
-    const k = Math.min(parseInt(url.searchParams.get('k') || '12'), 24);
+    const k = Math.min(parseInt(url.searchParams.get('k') || '10'), 24);
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify(recommend(appid, k)));
     return;
