@@ -1,4 +1,4 @@
-const CACHE = 'fknn-v1';
+const CACHE = 'fknn-v2';
 const STATIC = ['/', '/index.html', '/manifest.json', '/assets/logo.png'];
 
 self.addEventListener('install', e => {
